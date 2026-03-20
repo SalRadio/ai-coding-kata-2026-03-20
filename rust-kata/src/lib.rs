@@ -7,6 +7,7 @@ pub enum CustomerType {
     Vip,
     Premium,
     Employee,
+    Partner,
 }
 
 impl CustomerType {
@@ -15,6 +16,7 @@ impl CustomerType {
             "vip" => Self::Vip,
             "premium" => Self::Premium,
             "employee" => Self::Employee,
+            "partner" => Self::Partner,
             "new" => Self::New,
             _ => Self::Regular,
         }
@@ -48,6 +50,7 @@ pub enum CouponCode {
     Bulk,
     FreeShip,
     TaxFree,
+    Partner5,
 }
 
 impl CouponCode {
@@ -58,6 +61,7 @@ impl CouponCode {
             "BULK" => Self::Bulk,
             "FREESHIP" => Self::FreeShip,
             "TAXFREE" => Self::TaxFree,
+            "PARTNER5" => Self::Partner5,
             _ => Self::None,
         }
     }
@@ -69,15 +73,19 @@ const VIP_DISCOUNT: i32 = 15;
 const PREMIUM_HIGH_DISCOUNT: i32 = 10;
 const PREMIUM_LOW_DISCOUNT: i32 = 5;
 const EMPLOYEE_DISCOUNT: i32 = 30;
+const PARTNER_DISCOUNT: i32 = 12;
 const SAVE10_DISCOUNT: i32 = 10;
 const VIPONLY_DISCOUNT: i32 = 5;
 const BULK_DISCOUNT: i32 = 7;
+const PARTNER5_DISCOUNT: i32 = 5;
 const BLACK_FRIDAY_DISCOUNT: i32 = 5;
+const PARTNER_BLACK_FRIDAY_DISCOUNT: i32 = 3;
 const MAX_DISCOUNT: i32 = 40;
 
 const PREMIUM_HIGH_DISCOUNT_THRESHOLD: i32 = 10_000;
 const SAVE10_THRESHOLD: i32 = 5_000;
 const BULK_THRESHOLD: i32 = 20_000;
+const PARTNER5_THRESHOLD: i32 = 12_000;
 
 const SHIPPING_IT: i32 = 700;
 const SHIPPING_DE: i32 = 900;
@@ -88,6 +96,7 @@ const EMPLOYEE_ABROAD_SURCHARGE: i32 = 500;
 const FREESHIP_THRESHOLD: i32 = 8_000;
 const VIP_FREE_SHIPPING_THRESHOLD: i32 = 15_000;
 const PREMIUM_FREE_SHIPPING_THRESHOLD: i32 = 20_000;
+const PARTNER_FREE_SHIPPING_THRESHOLD: i32 = 15_000;
 
 const TAX_IT: i32 = 22;
 const TAX_DE: i32 = 19;
@@ -143,6 +152,7 @@ fn customer_type_discount(customer: CustomerType, subtotal: i32) -> i32 {
         CustomerType::Premium if subtotal >= PREMIUM_HIGH_DISCOUNT_THRESHOLD => PREMIUM_HIGH_DISCOUNT,
         CustomerType::Premium => PREMIUM_LOW_DISCOUNT,
         CustomerType::Employee => EMPLOYEE_DISCOUNT,
+        CustomerType::Partner => PARTNER_DISCOUNT,
         CustomerType::Regular | CustomerType::New => 0,
     }
 }
@@ -152,6 +162,7 @@ fn coupon_discount(customer: CustomerType, subtotal: i32, coupon: CouponCode) ->
         CouponCode::Save10 if subtotal >= SAVE10_THRESHOLD => SAVE10_DISCOUNT,
         CouponCode::VipOnly if customer == CustomerType::Vip => VIPONLY_DISCOUNT,
         CouponCode::Bulk if subtotal >= BULK_THRESHOLD => BULK_DISCOUNT,
+        CouponCode::Partner5 if customer == CustomerType::Partner && subtotal >= PARTNER5_THRESHOLD => PARTNER5_DISCOUNT,
         _ => 0,
     }
 }
@@ -159,6 +170,7 @@ fn coupon_discount(customer: CustomerType, subtotal: i32, coupon: CouponCode) ->
 fn black_friday_discount(customer: CustomerType, black_friday: bool) -> i32 {
     match (black_friday, customer) {
         (true, CustomerType::Employee) => 0,
+        (true, CustomerType::Partner) => PARTNER_BLACK_FRIDAY_DISCOUNT,
         (true, _) => BLACK_FRIDAY_DISCOUNT,
         _ => 0,
     }
@@ -188,6 +200,10 @@ fn calculate_shipping_cents(
     }
 
     if customer == CustomerType::Premium && discounted_subtotal >= PREMIUM_FREE_SHIPPING_THRESHOLD {
+        shipping = 0;
+    }
+
+    if customer == CustomerType::Partner && discounted_subtotal >= PARTNER_FREE_SHIPPING_THRESHOLD {
         shipping = 0;
     }
 
@@ -425,5 +441,72 @@ mod tests {
     #[test]
     fn zero_subtotal() {
         assert_eq!(calculate_total_cents(&order("regular", 0, "IT", "", false)), 700);
+    }
+
+    // --- Partner customer type ---
+
+    #[test]
+    fn partner_base_discount() {
+        // 12% discount on 10000 = 8800, shipping IT 700, tax 22% of 8800 = 1936
+        assert_eq!(calculate_total_cents(&order("partner", 10000, "IT", "", false)), 11436);
+    }
+
+    #[test]
+    fn partner_free_shipping_above_threshold() {
+        // 12% discount on 20000 = 17600 (>= 15000 → free shipping), tax 22% of 17600 = 3872
+        assert_eq!(calculate_total_cents(&order("partner", 20000, "IT", "", false)), 21472);
+    }
+
+    #[test]
+    fn partner_no_free_shipping_below_threshold() {
+        // 12% discount on 16000 = 14080 (< 15000 → pays shipping)
+        // shipping IT 700, tax 22% of 14080 = 3097
+        assert_eq!(calculate_total_cents(&order("partner", 16000, "IT", "", false)), 17877);
+    }
+
+    #[test]
+    fn partner5_coupon_above_threshold() {
+        // partner(12%) + PARTNER5(5%) = 17% on 12000 = 9960
+        // shipping IT 700, tax 22% of 9960 = 2191
+        assert_eq!(calculate_total_cents(&order("partner", 12000, "IT", "PARTNER5", false)), 12851);
+    }
+
+    #[test]
+    fn partner5_coupon_below_threshold_no_effect() {
+        // subtotal 11999 < 12000 → PARTNER5 not applied, only 12% discount
+        // 12% on 11999 = 10559, shipping IT 700, tax 22% of 10559 = 2322
+        assert_eq!(calculate_total_cents(&order("partner", 11999, "IT", "PARTNER5", false)), 13581);
+    }
+
+    #[test]
+    fn partner5_coupon_for_non_partner_no_effect() {
+        // PARTNER5 only works for partner customers
+        assert_eq!(calculate_total_cents(&order("regular", 15000, "IT", "PARTNER5", false)), 19000);
+    }
+
+    #[test]
+    fn partner_black_friday_gets_3_percent() {
+        // partner(12%) + BF(3%) = 15% on 10000 = 8500
+        // shipping IT 700, tax 22% of 8500 = 1870
+        assert_eq!(calculate_total_cents(&order("partner", 10000, "IT", "", true)), 11070);
+    }
+
+    #[test]
+    fn partner_black_friday_with_partner5() {
+        // partner(12%) + PARTNER5(5%) + BF(3%) = 20% on 15000 = 12000 (< 15000 → pays shipping)
+        // shipping IT 700, tax 22% of 12000 = 2640
+        assert_eq!(calculate_total_cents(&order("partner", 15000, "IT", "PARTNER5", true)), 15340);
+    }
+
+    #[test]
+    fn partner_shipping_germany() {
+        // 12% on 10000 = 8800, shipping DE 900, tax 19% of 8800 = 1672
+        assert_eq!(calculate_total_cents(&order("partner", 10000, "DE", "", false)), 11372);
+    }
+
+    #[test]
+    fn partner_taxfree_coupon_outside_italy() {
+        // 12% on 10000 = 8800, shipping DE 900, tax 0%
+        assert_eq!(calculate_total_cents(&order("partner", 10000, "DE", "TAXFREE", false)), 9700);
     }
 }
