@@ -38,3 +38,16 @@ Add support for a new customer type called "partner" with specific rules for dis
 
 ## Outcome
 The codebase will be updated to include the new "partner" customer type with its associated rules for discounts and shipping. The implementation will ensure that the existing behavior for other customer types remains unchanged. New tests will be added to validate the correct behavior of the partner customer type, including scenarios for base discount, free shipping, coupon usage, and Black Friday discounts. The overall code will remain maintainable and extendable, allowing for future additions without significant refactoring.
+
+# Prompt 4
+let's create a new markdown file in the same directory. The file must be called "solution.md" and will contain the following information:
+
+- what was wrong in the legacy design
+- what changed
+- why the new structure is easier to extend
+
+## Purpose
+Document the changes made to the codebase, including the issues with the legacy design, the specific changes implemented, and the reasons why the new structure is easier to extend.
+
+## Outcome
+A comprehensive markdown file named "solution.md" that provides a clear explanation of the problems with the legacy design, the changes that were made to address those problems, and the benefits of the new structure in terms of extensibility. This documentation will serve as a reference for future developers and help them understand the rationale behind the refactoring decisions and how to work with the new codebase effectively.
